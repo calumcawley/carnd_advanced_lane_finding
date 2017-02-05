@@ -5,42 +5,28 @@ import pickle
 import matplotlib.pyplot as plt
 import matplotlib.image as mpimg
 
-#setup somewhere for us to display stuff
-f, ((ax1, ax2), (ax3, ax4)) = plt.subplots(2,2,figsize=(20,10))
 
-#get saved camera distortion info
-dist_pickle = pickle.load( open( "../camera_cal/dist_pickle.p", "rb" ) )
-mtx = dist_pickle["mtx"]
-dist = dist_pickle["dist"]
-
-#load image and undistort it
-#img = cv2.imread('../test_images/straight_lines2.jpg')
-img = cv2.imread('../test_images/test5.jpg')
-undistortImg = cv2.undistort(img, mtx, dist, None, mtx)
 
 #perform perspective transform
 #points measured from straight_lines1,jpg
 
+def getWarpedImage(image, srcPoints, dstPoints, m):
 
-src = np.float32([[752,492],[1062,691],[247,691],[535,492]])
-dst = np.float32([[1062,492],[1062,691],[247,691],[247,492]])
-M = cv2.getPerspectiveTransform(src, dst)
-Minv = cv2.getPerspectiveTransform(dst, src)
+	undistortImg = cv2.undistort(image, mtx, dist, None, mtx)
 
-img_size = (undistortImg.shape[1], undistortImg.shape[0])
-warped = cv2.warpPerspective(undistortImg, M, img_size, flags=cv2.INTER_LINEAR)
+	img_size = (undistortImg.shape[1], undistortImg.shape[0])
+	warped = cv2.warpPerspective(undistortImg, m, img_size, flags=cv2.INTER_LINEAR)
 
 
-# ax1.set_title("Before warp")
-# ax1.imshow(cv2.cvtColor(undistortImg, cv2.COLOR_BGR2RGB))
-# ax1.plot(src[0][0], src[0][1], '.')
-# ax1.plot(src[1][0], src[1][1], '.')
-# ax1.plot(src[2][0], src[2][1], '.')
-# ax1.plot(src[3][0], src[3][1], '.')
+	# ax1.set_title("Before warp")
+	# ax1.imshow(cv2.cvtColor(undistortImg, cv2.COLOR_BGR2RGB))
+	# ax1.plot(srcPoints[0][0], srcPoints[0][1], '.')
+	# ax1.plot(srcPoints[1][0], srcPoints[1][1], '.')
+	# ax1.plot(srcPoints[2][0], srcPoints[2][1], '.')
+	# ax1.plot(srcPoints[3][0], srcPoints[3][1], '.')
+	return warped
 
-ax1.set_title("After warp")
-ax1.imshow(cv2.cvtColor(warped, cv2.COLOR_BGR2RGB))
-#plt.show()
+
 
 #find some lines
 # Define a function to return the magnitude of the gradient
@@ -79,16 +65,16 @@ def dir_threshold(img, sobel_kernel=3, thresh=(0, np.pi/2)):
     # Return the binary image
     return binary_output
 
-def abs_sobel_thresh(img, orient='x', thresh_min=0, thresh_max=255):
+def abs_sobel_thresh(img, sobel_kernel=3, orient='x', thresh_min=0, thresh_max=255):
     
     # Apply the following steps to img
     # 1) Convert to grayscale
     gray = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
     # 2) Take the derivative in x or y given orient = 'x' or 'y'
     if orient is 'x':
-        sobel = cv2.Sobel(gray, cv2.CV_64F, 1, 0)
+        sobel = cv2.Sobel(gray, cv2.CV_64F, 1, 0, ksize=sobel_kernel)
     elif orient is 'y':
-        sobel = cv2.Sobel(gray, cv2.CV_64F, 0, 1)    
+        sobel = cv2.Sobel(gray, cv2.CV_64F, 0, 1, ksize=sobel_kernel)    
     # 3) Take the absolute value of the derivative or gradient
     abs_sobel = np.absolute(sobel)
     # 4) Scale to 8-bit (0 - 255) then convert to type = np.uint8
@@ -101,53 +87,65 @@ def abs_sobel_thresh(img, orient='x', thresh_min=0, thresh_max=255):
     #binary_output = np.copy(img) # Remove this line
     return binary_output
 
-# Convert to HLS color space and separate the S channel
-# Note: img is the undistorted image
-hls = cv2.cvtColor(warped, cv2.COLOR_BGR2HLS)
-s_channel = hls[:,:,2]
+def colour_threshold(img, sThreshold=(0,255), rThreshold=(0,255)):
+	# Convert to HLS color space and separate the S channel
+	hls = cv2.cvtColor(img, cv2.COLOR_BGR2HLS)
+	s_channel = hls[:,:,2]
+	# Threshold color channel
 
-# Grayscale image
-# NOTE: we already saw that standard grayscaling lost color information for the lane lines
-# Explore gradients in other colors spaces / color channels to see what might work better
-# gray = cv2.cvtColor(warped, cv2.COLOR_BGR2GRAY)
+	s_binary = np.zeros_like(s_channel)
+	s_binary[(s_channel >= sThreshold[0]) & (s_channel <= sThreshold[1])] = 1
 
-# # Sobel x
-# sobelx = cv2.Sobel(gray, cv2.CV_64F, 1, 0) # Take the derivative in x
-# abs_sobelx = np.absolute(sobelx) # Absolute x derivative to accentuate lines away from horizontal
-# scaled_sobel = np.uint8(255*abs_sobelx/np.max(abs_sobelx))
+	r_channel = img[:,:,0]
+	r_thresh_min = 50
+	r_thresh_max = 255
+	r_binary = np.zeros_like(r_channel)
+	r_binary[(r_channel >= rThreshold[0]) & (r_channel <= rThreshold[1])] = 1
 
-# # Threshold x gradient
-# thresh_min = 20
-# thresh_max = 100
-# sxbinary = np.zeros_like(scaled_sobel)
-# sxbinary[(scaled_sobel >= thresh_min) & (scaled_sobel <= thresh_max)] = 1
-
-sXBinary = abs_sobel_thresh(warped, 'x', 20, 100)
-sMagBinary = mag_thresh(warped, 9, (20,255))
-sDirBinary = dir_threshold(warped, sobel_kernel=9, thresh=(0.7, 1.2))
-combined = np.zeros_like(sXBinary)
-combined[((sXBinary == 1) & (sMagBinary == 1))] = 1
-
-# Threshold color channel
-s_thresh_min = 170
-s_thresh_max = 255
-s_binary = np.zeros_like(s_channel)
-s_binary[(s_channel >= s_thresh_min) & (s_channel <= s_thresh_max)] = 1
+	binary_output = np.zeros_like(r_binary)
+	binary_output[(s_binary == 1) & (r_binary == 1)] = 1
+	
+	return binary_output
 
 
-# Stack each channel to view their individual contributions in green and blue respectively
-# This returns a stack of the two binary images, whose components you can see as different colors
-color_binary = np.dstack(( np.zeros_like(combined), combined, s_binary))
+def getBinaryProcessedImage(warped):
+	colourBinary = colour_threshold(warped, sThreshold=(100,255), rThreshold=(50, 255))
+	sXBinary = abs_sobel_thresh(warped, 9, 'x', 20, 150)
+	sMagBinary = mag_thresh(warped, 9, (20,100))
+	sDirBinary = dir_threshold(warped, sobel_kernel=3, thresh=(0.7, 1.2))
+	binary_output = np.zeros_like(sXBinary)
+	binary_output[(((sXBinary == 1) & (sMagBinary == 1) & (sDirBinary == 1)) | (colourBinary == 1))] = 1
 
-# Combine the two binary thresholds
-binary_warped = np.zeros_like(combined)
-binary_warped[(s_binary == 1) | (combined == 1)] = 1
+	return binary_output
 
-# Plotting thresholded images
-#ax1.set_title('Stacked thresholds')
-#ax1.imshow(color_binary)
 
-ax2.set_title('Combined S channel and gradient thresholds')
+#setup somewhere for us to display stuff
+f, ((ax1, ax2), (ax3, ax4)) = plt.subplots(2,2,figsize=(20,10))
+
+#get saved camera distortion info
+dist_pickle = pickle.load( open( "../camera_cal/dist_pickle.p", "rb" ) )
+mtx = dist_pickle["mtx"]
+dist = dist_pickle["dist"]
+
+#load image and undistort it
+#img = cv2.imread('../test_images/straight_lines2.jpg')
+img = cv2.imread('../test_images/test5.jpg')
+
+src = np.float32([[752,492],[1062,691],[247,691],[535,492]])
+dst = np.float32([[1062,492],[1062,691],[247,691],[247,492]])
+M = cv2.getPerspectiveTransform(src, dst)
+Minv = cv2.getPerspectiveTransform(dst, src)
+
+
+warpedImage = getWarpedImage(img, src, dst, M)
+
+binary_warped = getBinaryProcessedImage(warpedImage)
+
+ax1.set_title("After warp")
+ax1.imshow(cv2.cvtColor(warpedImage, cv2.COLOR_BGR2RGB))
+#plt.show()
+
+ax2.set_title('Combined colour and gradient thresholds')
 ax2.imshow(binary_warped, cmap='gray')
 
 # histogram = np.sum(binary_warped[binary_warped.shape[0]/2:,:], axis=0)
