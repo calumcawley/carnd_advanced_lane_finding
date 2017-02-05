@@ -97,8 +97,6 @@ def colour_threshold(img, sThreshold=(0,255), rThreshold=(0,255)):
 	s_binary[(s_channel >= sThreshold[0]) & (s_channel <= sThreshold[1])] = 1
 
 	r_channel = img[:,:,0]
-	r_thresh_min = 50
-	r_thresh_max = 255
 	r_binary = np.zeros_like(r_channel)
 	r_binary[(r_channel >= rThreshold[0]) & (r_channel <= rThreshold[1])] = 1
 
@@ -129,7 +127,7 @@ dist = dist_pickle["dist"]
 
 #load image and undistort it
 #img = cv2.imread('../test_images/straight_lines2.jpg')
-img = cv2.imread('../test_images/test5.jpg')
+img = cv2.imread('../test_images/test1.jpg')
 
 src = np.float32([[752,492],[1062,691],[247,691],[535,492]])
 dst = np.float32([[1062,492],[1062,691],[247,691],[247,492]])
@@ -227,11 +225,12 @@ right_fitx = right_fit[0]*ploty**2 + right_fit[1]*ploty + right_fit[2]
 
 out_img[nonzeroy[left_lane_inds], nonzerox[left_lane_inds]] = [255, 0, 0]
 out_img[nonzeroy[right_lane_inds], nonzerox[right_lane_inds]] = [0, 0, 255]
+ax3.set_title('Histogram windows and splines')
 ax3.imshow(out_img)
 ax3.plot(left_fitx, ploty, color='yellow')
 ax3.plot(right_fitx, ploty, color='yellow')
-# ax3.xlim(0, 1280)
-# ax3.ylim(720, 0)
+ax3.set_xlim([0, 1280])
+ax3.set_ylim([720, 0])
 
 
 # Create an image to draw the lines on
@@ -250,6 +249,8 @@ cv2.fillPoly(color_warp, np.int_([pts]), (0,255, 0))
 newwarp = cv2.warpPerspective(color_warp, Minv, (img.shape[1], img.shape[0])) 
 # Combine the result with the original image
 result = cv2.addWeighted(img, 1, newwarp, 0.3, 0)
+
+ax4.set_title('Final lane selection')
 ax4.imshow(cv2.cvtColor(result, cv2.COLOR_BGR2RGB))
 
 plt.show()
